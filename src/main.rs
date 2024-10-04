@@ -109,8 +109,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 return Ok(());
             }
 
-            println!("DEBUG: source: {}, target: {}", source_regex, target_regex);
-
             // 对所有匹配的文件进行重命名
             for file_name in matched_files {
                 let result = rename_by_regex(&file_name, &source_regex, &target_regex);
