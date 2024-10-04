@@ -47,7 +47,7 @@ exrn -s *.txt -r 'file_(\d+)' 'document_$1'
 This will match files like `file_123.txt` and rename them to `document_123.txt` after confirmation below:
 
 ```txt
-Matching files:
+Matching files...
         /path/to/file_123.txt -> /path/to/document_123.txt
 Do you want to proceed with the renaming of all matched files? [y/N]: 
 ```
