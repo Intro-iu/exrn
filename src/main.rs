@@ -1,4 +1,3 @@
-use clap::builder::Str;
 use clap::{Arg, Command};
 use regex::Regex;
 use std::fs;
@@ -24,7 +23,7 @@ fn match_by_regex(
     let captures = re.captures(source);
 
     // 如果匹配成功，返回匹配的文件名
-    if let Some(captures) = captures {
+    if let Some(_captures) = captures {
         return true;
     } else {
         return false;
