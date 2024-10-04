@@ -1,3 +1,4 @@
+use clap::builder::Str;
 use clap::{Arg, Command};
 use regex::Regex;
 use std::fs;
@@ -16,7 +17,7 @@ fn make_absolute_path(relative_path: &str) -> PathBuf {
 fn match_by_regex(
     source: &str,             // 源文件名称
     source_pattern: &str      // 匹配源文件的正则表达式
-) -> String {
+) -> bool {
     // 编译源文件正则表达式
     let re = Regex::new(source_pattern).unwrap();
     // 使用正则表达式匹配文件名
@@ -24,11 +25,10 @@ fn match_by_regex(
 
     // 如果匹配成功，返回匹配的文件名
     if let Some(captures) = captures {
-        return captures.get(0).unwrap().as_str().to_string();
+        return true;
+    } else {
+        return false;
     }
-
-    // 如果匹配失败，返回空字符串
-    "".to_string()
 }
 
 // 文件或文件夹重命名函数，基于正则表达式
@@ -124,13 +124,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         // 使用glob解析支持通配符的文件路径
         let mut matched_files = vec![];
 
-        println!("Matching files:");
+        println!("Matching files...");
         for source in &source_glob {
             for entry in glob(&source)? {
                 match entry {
                     Ok(path) => {
                         let file_name = path.to_string_lossy().to_string();
-                        if match_by_regex(&file_name, source_regex) != "" {
+                        if match_by_regex(&file_name, source_regex) {
                             matched_files.push(file_name);
                         }
                     }
