@@ -7,13 +7,13 @@ use glob::glob;
 use std::io::{self, Write};
 
 // 文件或文件夹重命名函数，基于正则表达式
-fn rename_by_regexp(
+fn rename_by_regex(
     source: &str,             // 源文件名称
     source_pattern: &str,     // 匹配源文件的正则表达式
     target_pattern: &str      // 重命名目标的正则化表达式
 ) -> Result<(), Box<dyn Error>> {
     // 编译源文件正则表达式
-    let re = Regex::new(source_pattern)?;
+    let re = Regex::new(source_pattern).unwrap();
 
     // 检查源文件名称是否匹配正则表达式
     if let Some(_captures) = re.captures(source) {
@@ -54,21 +54,18 @@ fn confirm_rename() -> bool {
 fn main() -> Result<(), Box<dyn Error>> {
     // 使用clap解析命令行参数
     let matches = Command::new("exrn")
-        .version("0.1.0")
-        .author("Intro <Intro-iu@outlook.com>")
-        .about("A simple terminal tool for renaming files")
         .arg(Arg::new("src")    // 源文件名或通配符
             .required(true)
             .short('s')
             .long("src")
-            .value_name("SOURCE")
+            .value_name("SOURCE_PATTERN")
             .help("Sets the source file name or pattern (e.g. *.txt)"))
         .arg(Arg::new("rule")   // 两个正则表达式
             .required(true)
             .num_args(2)
             .short('r')
             .long("rule")
-            .value_names(&["Regex for Source", "Regex for Target"]) // 源文件名正则表达式，目标文件名正则表达式
+            .value_names(&["SOURCE_REGEX", "TARGET_REGEX"]) // 源文件名正则表达式，目标文件名正则表达式
             .help("Sets two regular expressions to match & rename"))
         .arg(Arg::new("yes")    // 是否跳过确认提示
             .required(false)
@@ -112,9 +109,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                 return Ok(());
             }
 
+            println!("DEBUG: source: {}, target: {}", source_regex, target_regex);
+
             // 对所有匹配的文件进行重命名
             for file_name in matched_files {
-                let result = rename_by_regexp(&file_name, &source_regex, &target_regex);
+                let result = rename_by_regex(&file_name, &source_regex, &target_regex);
                 if let Err(e) = result {
                     eprintln!("Error renaming file {}: {}", file_name, e);
                 }

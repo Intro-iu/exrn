@@ -1,7 +1,15 @@
 [package]
 name = "exrn"
-version = "0.1.0"
 edition = "2021"
+version = "0.1.0"
+authors = ["Intro <Intro-iu@outlook.com>"]
+license = "GPL-3.0"
+description = "A simple terminal tool for renaming files"
+readme = "README.md"
+homepage = "https://github.com/Intro-iu/exrn"
+repository = "https://github.com/Intro-iu/exrn"
+keywords = ["cli", "rename"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
