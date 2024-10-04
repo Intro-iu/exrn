@@ -1,4 +1,4 @@
-# exrn - A Command-line File Renaming Tool Based on Regular Expressions
+# exrn
 
 `exrn` is a simple and flexible command-line tool that renames files based on regular expression patterns. It allows users to specify patterns to match files and transform them into new names using customizable replacement rules.
 
