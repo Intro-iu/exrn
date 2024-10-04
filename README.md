@@ -44,7 +44,13 @@ Suppose you have multiple `.txt` files that follow a naming pattern like `file_1
 exrn -s *.txt -r 'file_(\d+)' 'document_$1'
 ```
 
-This will match files like `file_123.txt` and rename them to `document_123.txt`.
+This will match files like `file_123.txt` and rename them to `document_123.txt` after confirmation below:
+
+```txt
+Matching files:
+        /path/to/file_123.txt -> /path/to/document_123.txt
+Do you want to proceed with the renaming of all matched files? [y/N]: 
+```
 
 ### Skipping Confirmation:
 If you are certain of the changes and want to skip the confirmation prompt, use the `--yes` flag:
