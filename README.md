@@ -20,7 +20,7 @@
 
 ### Via Cargo (Recommended)
 ```bash
-cargo install exrn --git https://github.com/Intro-iu/exrn.git
+cargo install --git https://github.com/Intro-iu/exrn.git
 ```
 
 ### From Source
