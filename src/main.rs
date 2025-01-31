@@ -1,172 +1,163 @@
 use clap::{Arg, Command};
 use regex::Regex;
-use std::fs;
-use std::path::PathBuf;
-use std::path::Path;
+use std::collections::HashSet;
 use std::error::Error;
-use glob::glob;
+use std::fs;
 use std::io::{self, Write};
+use std::path::{Path, PathBuf};
+use glob::glob;
 
-fn make_absolute_path(relative_path: &str) -> PathBuf {
-    let mut absolute_path = std::env::current_dir().expect("Failed to get current directory");
-    absolute_path.push(relative_path);
-    absolute_path
-}
-
-fn match_by_regex(
-    source: &str,             // 源文件名称
-    source_pattern: &str      // 匹配源文件的正则表达式
-) -> bool {
-    // 编译源文件正则表达式
-    let re = Regex::new(source_pattern).unwrap();
-    // 使用正则表达式匹配文件名
-    let captures = re.captures(source);
-
-    // 如果匹配成功，返回匹配的文件名
-    if let Some(_captures) = captures {
-        return true;
+// 将路径转换为绝对路径并规范化
+fn normalize_path(path: &str) -> Result<PathBuf, Box<dyn Error>> {
+    let path = Path::new(path);
+    Ok(if path.is_absolute() {
+        path.to_path_buf()
     } else {
-        return false;
+        std::env::current_dir()?.join(path)
+    })
+}
+
+// 使用正则表达式验证文件名匹配
+fn match_filename(
+    file_path: &Path,
+    source_regex: &Regex
+) -> Result<bool, Box<dyn Error>> {
+    let file_name = file_path.file_name()
+        .ok_or("Invalid file name")?
+        .to_string_lossy();
+    Ok(source_regex.is_match(&file_name))
+}
+
+// 执行正则替换生成新文件名
+fn generate_new_path(
+    file_path: &Path,
+    source_regex: &Regex,
+    target_pattern: &str
+) -> Result<PathBuf, Box<dyn Error>> {
+    let file_name = file_path.file_name()
+        .ok_or("Invalid file name")?
+        .to_string_lossy();
+    
+    let new_name = source_regex.replace_all(&file_name, target_pattern);
+    
+    // 校验新文件名有效性
+    if new_name.is_empty() {
+        return Err("New file name cannot be empty".into());
     }
+    if new_name.contains(std::path::MAIN_SEPARATOR) {
+        return Err(format!("New name contains path separator: {}", new_name).into());
+    }
+    
+    Ok(file_path.with_file_name(new_name.as_ref()))
 }
 
-// 文件或文件夹重命名函数，基于正则表达式
-fn rename_by_regex(
-    source: &str,             // 源文件名称
-    source_pattern: &str,     // 匹配源文件的正则表达式
-    target_pattern: &str      // 重命名目标的正则化表达式
-) -> (PathBuf, PathBuf) {
-    // 编译源文件正则表达式
-    let re = Regex::new(source_pattern).unwrap();
-    // 使用目标模式替换匹配项生成新文件名
-    let new_name = re.replace(source, target_pattern);
-
-    // 进行重命名操作
-    let source_path = Path::new(source).to_path_buf();
-    let new_path = source_path.with_file_name(new_name.to_string());
-
-    let item = (source_path, new_path);
-
-    item
-}
-
-fn apply_rename(
-    source: &Path,            // 源文件路径
-    target: &Path             // 目标文件路径
-) -> Result<(), Box<dyn Error>> {
-    // 检查目标文件是否存在
+// 执行重命名操作
+fn safe_rename(source: &Path, target: &Path) -> Result<(), Box<dyn Error>> {
+    if source == target {
+        return Err("Source and target are the same".into());
+    }
     if target.exists() {
         return Err("Target file already exists".into());
     }
-
-    // 重命名文件
     fs::rename(source, target)?;
-
     Ok(())
 }
 
-// 询问用户是否确认继续操作
-fn confirm_rename() -> bool {
-    // 提示用户输入 y 或 n
-    print!("Do you want to proceed with the renaming of all matched files? [y/N]: ");
-    io::stdout().flush().unwrap(); // 确保提示立即显示
-
-    // 读取用户输入
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).unwrap();
+// 用户确认提示
+fn confirm_action(prompt: &str) -> Result<bool, Box<dyn Error>> {
+    print!("{} [y/N]: ", prompt);
+    io::stdout().flush()?;
     
-    // 将输入转为小写并去除空格、换行符
-    let input = input.trim().to_lowercase();
-
-    // 检查用户是否输入了 'y' 或 'yes'
-    input == "y" || input == "yes"
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    
+    Ok(matches!(input.trim().to_lowercase().as_str(), "y" | "yes"))
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // 使用clap解析命令行参数
-    let matches = Command::new("exrn")
-        .arg(Arg::new("src")    // 源文件名或通配符
+    let matches = Command::new("rex")
+        .version("1.0")
+        .about("Safe batch file renamer using regular expressions")
+        .arg(Arg::new("sources")
             .required(true)
-            .num_args(1..)
             .short('s')
-            .long("src")
-            .value_name("SOURCE_PATTERN")
-            .help("Sets the source file name or pattern (e.g. *.txt)"))
-        .arg(Arg::new("rule")   // 两个正则表达式
+            .long("sources")
+            .num_args(1..)
+            .value_name("GLOB_PATTERN")
+            .help("File glob patterns to match (e.g. *.txt)"))
+        .arg(Arg::new("rule")
             .required(true)
-            .num_args(2)
             .short('r')
             .long("rule")
-            .value_names(&["SOURCE_REGEX", "TARGET_REGEX"]) // 源文件名正则表达式，目标文件名正则表达式
-            .help("Sets two regular expressions to match & rename"))
-        .arg(Arg::new("yes")    // 是否跳过确认提示
-            .required(false)
+            .num_args(2)
+            .value_names(["SOURCE_REGEX", "TARGET_PATTERN"])
+            .help("Regex pattern and replacement (e.g. '^(.*)\\.txt$' '$1.md')"))
+        .arg(Arg::new("yes")
             .short('y')
             .long("yes")
-            .help("Confirms automatically with yes")
+            .help("Auto-confirm all prompts")
             .action(clap::ArgAction::SetTrue))
         .get_matches();
 
-    // 获取命令行参数
-    if let (Some(source_pattern), Some(reg_exp)) = (
-        matches.get_many::<String>("src"), 
-        matches.get_many::<String>("rule"),
-    ) {
-        let source_glob: Vec<_> = source_pattern.collect();
-        let regs: Vec<_> = reg_exp.collect();
-        let source_regex = &regs[0];
-        let target_regex = &regs[1];
+    // 解析正则表达式
+    let rules = matches.get_many::<String>("rule")
+        .ok_or("Missing regex rules")?
+        .collect::<Vec<_>>();
+    let source_regex = Regex::new(rules[0])?;
+    let target_pattern = rules[1];
 
-        // 是否跳过确认提示
-        let skip_confirmation = matches.get_flag("yes");
-
-        // 使用glob解析支持通配符的文件路径
-        let mut matched_files = vec![];
-
-        println!("Matching files...");
-        for source in &source_glob {
-            for entry in glob(&source)? {
-                match entry {
-                    Ok(path) => {
-                        let file_name = path.to_string_lossy().to_string();
-                        if match_by_regex(&file_name, source_regex) {
-                            matched_files.push(file_name);
-                        }
-                    }
-                    Err(e) => eprintln!("Error accessing file: {}", e),
-                }
+    // 收集唯一匹配文件
+    let mut matched_files = HashSet::new();
+    for pattern in matches.get_many::<String>("sources").unwrap() {
+        for entry in glob(pattern)? {
+            let path = normalize_path(&entry?.to_string_lossy())?;
+            if path.is_file() && match_filename(&path, &source_regex)? {
+                matched_files.insert(path);
             }
         }
-
-        // 如果有匹配文件
-        if !matched_files.is_empty() {
-            // 对所有匹配的文件进行重命名
-            let mut items = Vec::new();
-            for file_name in matched_files {
-                let absolute_path = make_absolute_path(&file_name).display().to_string();
-                items.push(rename_by_regex(&absolute_path, source_regex, target_regex));
-                println!("\t{} -> {}", items.last().unwrap().0.display(), items.last().unwrap().1.display());
-            }
-
-            // 如果没有 '-y' 参数，询问用户是否确认操作
-            if !skip_confirmation && !confirm_rename() {
-                println!("Operation cancelled.");
-                return Ok(());
-            }
-
-            for (source, target) in items {
-                let result = apply_rename(&source, &target);
-                match result {
-                    Ok(_) => (),
-                    Err(e) => eprintln!("Error renaming file: {}", e),
-                }
-            }
-        } else {
-            println!("No files matched the pattern.");
-        }
-    } else {
-        println!("No regular expression provided");
     }
 
+    if matched_files.is_empty() {
+        println!("No files matched the criteria");
+        return Ok(());
+    }
+
+    // 生成重命名计划
+    let mut rename_plan = Vec::new();
+    for source in &matched_files {
+        let target = generate_new_path(source, &source_regex, target_pattern)?;
+        if source != &target {
+            rename_plan.push((source.clone(), target));
+        }
+    }
+
+    // 显示变更预览
+    println!("Planned changes ({} files):", rename_plan.len());
+    for (i, (src, dst)) in rename_plan.iter().enumerate() {
+        println!("[{:2}] {} => {}", 
+            i+1,
+            src.file_name().unwrap().to_string_lossy(),
+            dst.file_name().unwrap().to_string_lossy()
+        );
+    }
+
+    // 用户确认
+    let auto_confirm = matches.get_flag("yes");
+    if !auto_confirm && !confirm_action("Confirm renaming?")? {
+        println!("Operation cancelled");
+        return Ok(());
+    }
+
+    // 执行重命名
+    let mut success = 0;
+    for (src, dst) in &rename_plan {
+        match safe_rename(src, dst) {
+            Ok(_) => success += 1,
+            Err(e) => eprintln!("Error renaming {}: {}", src.display(), e),
+        }
+    }
+
+    println!("Successfully renamed {}/{} files", success, rename_plan.len());
     Ok(())
 }
+
