@@ -3,18 +3,22 @@
 **A Safe & Powerful Batch File Renamer with Regex Magic** ✨
 
 ![Rust](https://img.shields.io/badge/rust-%23e57373.svg?style=flat&logo=rust&logoColor=white)
+![Build](https://github.com/Intro-iu/exrn/actions/workflows/ci.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)
- 
+
 *Transform your files like a wizard! 🧙*
 
 ## Features 🌟
 
-- 🎯 **Precision Matching** with regex patterns
-- 🔄 **Smart Replacement** using capture groups
-- 👮 **Safety First** - Interactive confirmation & dry-run preview
-- 🚀 **Blazing Fast** - Built with Rust performance
-- 📦 **Cross-Platform** - Works on Windows/macOS/Linux
-- 📝 **Visual Feedback** - Colorized diff previews
+- 🎯 **Precision Matching**: Supports both standard GLOB patterns and direct Shell-expanded paths.
+- 🔄 **Smart Replacement**: Use standard Regex Capture Groups (e.g., `$1`, `$2`) for complex renaming.
+- ⛓️ **Chain Renaming**: Safely handles dependency chains (e.g., `A -> B`, `B -> C`) using topological sorting.
+- 🎨 **Visual Feedback**: **Colorized** diff previews (Red -> Green) to verify changes instantly.
+- 🛡️ **Safety First**:
+    - **Dry Run** mode to preview without touching files.
+    - Collision detection.
+    - Interactive confirmation.
+- 🚀 **Blazing Fast**: Built with Rust.
 
 ## Installation ⚡
 
@@ -34,69 +38,59 @@ cargo install --path .
 
 ### Basic Syntax
 ```bash
-exrn -s "GLOB_PATTERN" -r "SOURCE_REGEX" "TARGET_PATTERN" [OPTIONS]
+exrn -s [SOURCES] -r 'REGEX' 'REPLACEMENT' [OPTIONS]
 ```
+> **Tip**: It is recommended to use **single quotes** `'...'` for regex patterns to prevent Shell from incorrectly expanding `$1` or `*`.
 
-### Key Options
-| Option          | Description                          |
-|-----------------|--------------------------------------|
-| `-s, --sources` | File glob patterns (e.g., `*.txt`)   |
-| `-r, --rule`    | Regex match and replacement pattern  |
-| `-y, --yes`     | Auto-confirm all actions             |
+### Options
+| Option      | Short | Description                                                                       |
+| ----------- | ----- | --------------------------------------------------------------------------------- |
+| `--sources` | `-s`  | File glob patterns or file paths (e.g. `'*.txt'` or `file.txt`)                   |
+| `--rule`    | `-r`  | **Required**. Regex pattern and replacement string (e.g. `'(.*)\.txt'` `'$1.md'`) |
+| `--dry-run` | `-d`  | Print the planned changes and exit without modifying anything                     |
+| `--sort`    |       | Sort the output list by source filename (Default: true)                           |
+| `--yes`     | `-y`  | Auto-confirm all prompts (Non-interactive mode)                                   |
 
 ## Examples 🧪
 
-### 1. Change File Extensions (With Confirmation)
+### 1. Change Extensions (Dry Run first!)
+Preview what would happen:
 ```bash
-exrn -s "*.txt" -r '^(.*)\.txt$' '$1.md'
+exrn -s '*.txt' -r '(.*)\.txt' '$1.md' --dry-run
 ```
 
-**Interactive Output**:
-```text
-Matching files...
-[1] notes.txt => notes.md
-[2] draft.txt => draft.md
-
-Planned changes (2 files):
-Do you want to proceed with the renaming? [y/N]: y
-
-Renaming completed! 2/2 files successfully renamed
-```
-
-### 2. Auto-Confirm with -y Flag
+### 2. Rename with Smart Chain Sorting
+If you have files `part1.txt`, `part2.txt`, `part3.txt` and want to shift them naming-wise:
 ```bash
-exrn -s "temp_*" -r 'temp_' 'final_' -y
+# Safely handles renaming part2 -> part3 even if part3 exists (but is also being moved)
+exrn -s 'part*' -r 'part(\d+)' 'part${1}_next'
 ```
 
-**Output**:
-```text
-Auto-confirm enabled
-[1] temp_file1 => final_file1
-[2] temp_file2 => final_file2
-Renamed 2 files successfully
-```
-
-### 3. Date Format Conversion
+### 3. Date Formatting
+Convert `2023-01-01_log.txt` to `log_2023-01-01.txt`:
 ```bash
-exrn -s "*.log" -r '(\d{4})-(\d{2})-(\d{2})' '$2$3$1'
+exrn -s '*.txt' -r '(\d{4}-\d{2}-\d{2})_(.*)\.txt' '$2_$1.txt'
 ```
-📆 *Converts `2023-08-15.log` → `08152023.log`*
+
+### 4. Direct Files (Shell Expansion)
+You can let your shell handle the globbing (useful for zsh/bash users):
+```bash
+exrn -s *.png -r 'Img_(.*)' 'Picture_$1'
+```
 
 ## Safety Measures 🔒
 
-exrn includes multiple protection layers:
-```rust
-if source == target { /* Skip identical paths */ }
-if target.exists() { /* Prevent overwrites */ }
-if new_name.is_empty() { /* Block empty names */ }
-```
+`exrn` includes robust protection layers:
+- **Cycle Detection**: Prevents circular renaming (e.g. `A->B` and `B->A`) which would require temporary files.
+- **Topological Sorting**: Automatically orders operations so you don't overwrite files that are themselves being moved.
+- **Path Validation**: Prevents accidental file movement to other directories if not intended.
 
 ## License 📄
 
-This project is licensed under the MIT License - see the [LICENSE](https://github.com/Intro-iu/exrn/blob/main/LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-💡 **Pro Tip**: Always check the preview before confirming!  
-🐞 Found an issue? [Report it here](https://github.com/Intro-iu/exrn/issues)  
+💡 **Pro Tip**: Always use `--dry-run` (`-d`) first when trying complex regexes!
+🐞 Found an issue? [Report it here](https://github.com/Intro-iu/exrn/issues)
 ⭐ Love exrn? Give us a star on [GitHub](https://github.com/Intro-iu/exrn)!
