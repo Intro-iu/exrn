@@ -74,19 +74,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     } else {
         // Headless Mode (Standard Output)
-        println!("Planned changes ({} files):", display_plan.len());
-        for (i, action) in display_plan.iter().enumerate() {
-            let src_name = action.source.file_name().unwrap().to_string_lossy();
-            let dst_name = action.target.file_name().unwrap().to_string_lossy();
-            
-            println!(
-                "[{:>2}] {} {} {}",
-                (i + 1).to_string().dimmed(),
-                src_name.red(),
-                "=>".dimmed(),
-                dst_name.green()
-            );
-        }
+        tui::print_preview(display_plan)?;
 
         if args.dry_run {
             println!("{}", "Dry run complete. No files were modified.".yellow());

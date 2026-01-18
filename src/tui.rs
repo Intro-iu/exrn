@@ -12,7 +12,7 @@ use ratatui::{
     widgets::{
         Block, Borders, Cell, Row, Table, TableState,
     },
-    Frame, Terminal,
+    Frame, Terminal, TerminalOptions, Viewport,
 };
 use std::error::Error;
 use std::io;
@@ -21,6 +21,7 @@ pub struct App {
     pub actions: Vec<RenameAction>,
     pub selected: Vec<bool>, // true if action is selected for execution
     pub state: TableState,
+    pub show_help: bool,
 }
 
 impl App {
@@ -30,6 +31,7 @@ impl App {
             actions,
             selected: vec![true; count], // Default all selected
             state: TableState::default().with_selected(0),
+            show_help: true,
         }
     }
 
@@ -110,6 +112,25 @@ pub fn run_tui(actions: Vec<RenameAction>) -> Result<Option<Vec<RenameAction>>, 
     }
 }
 
+pub fn print_preview(actions: Vec<RenameAction>) -> Result<(), Box<dyn Error>> {
+    let mut app = App::new(actions);
+    app.show_help = false;
+    app.state.select(None); // Disable cursor highlight
+
+    let height = (app.actions.len() + 4) as u16;
+
+    let backend = CrosstermBackend::new(io::stdout());
+    let mut terminal = Terminal::with_options(
+        backend,
+        TerminalOptions {
+            viewport: Viewport::Inline(height),
+        },
+    )?;
+
+    terminal.draw(|f| ui(f, &mut app))?;
+    Ok(())
+}
+
 fn run_app(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>, app: &mut App) -> Result<bool, Box<dyn Error>> {
     loop {
         terminal.draw(|f| ui(f, app))?;
@@ -147,19 +168,20 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
 
     let rows = app.actions.iter().enumerate().map(|(i, action)| {
         let is_selected = app.selected[i];
-        
+        let has_cursor = app.state.selected().map_or(false, |s| s == i);
+
         let checkbox = if is_selected { "[x]" } else { "[ ]" };
-        let checkbox_style = if is_selected {
+        let checkbox_style = if has_cursor {
             Style::default().fg(Color::White)
         } else {
-            Style::default().fg(Color::DarkGray)
+            if is_selected { Style::default().fg(Color::White) } else { Style::default().fg(Color::DarkGray) }
         };
 
         let src = action.source.file_name().unwrap_or_default().to_string_lossy();
         let target = action.target.file_name().unwrap_or_default().to_string_lossy();
         
         // Colors: If selected, White -> White. If not, Dimmed.
-        let (src_style, target_style) = if is_selected {
+        let (src_style, target_style) = if has_cursor || is_selected {
             (Style::default().fg(Color::White), Style::default().fg(Color::White))
         } else {
             (Style::default().fg(Color::DarkGray), Style::default().fg(Color::DarkGray))
@@ -173,19 +195,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
         Row::new(cells).height(1).bottom_margin(0)
     });
 
-    let help_text = Line::from(vec![
-        Span::raw(" Controls: "),
-        Span::styled("↑/↓", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(" Select | "),
-        Span::styled("Space", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(" Toggle | "),
-        Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(" Confirm | "),
-        Span::styled("q/Esc", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(" Quit "),
-    ]);
-
-    let t = Table::new(
+    let mut table = Table::new(
         rows,
         [
             Constraint::Length(10),
@@ -193,16 +203,33 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
             Constraint::Percentage(45),
         ],
     )
-    .header(header)
-    .block(
-        Block::default()
+    .header(header);
+
+    let mut block = Block::default()
             .borders(Borders::ALL)
             .title(" exrn - Review Changes ")
-            .title_bottom(help_text)
-            .border_style(Style::default().fg(Color::Rgb(85, 108, 255)))
-    )
-    .highlight_symbol(" >> ")
-    .row_highlight_style(Style::default().bg(Color::Rgb(123, 141, 255)).fg(Color::White).add_modifier(Modifier::BOLD));
+            .border_style(Style::default().fg(Color::Rgb(85, 108, 255)));
 
-    f.render_stateful_widget(t, area, &mut app.state);
+    if app.show_help {
+        let help_text = Line::from(vec![
+            Span::raw(" Controls: "),
+            Span::styled("↑/↓", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" Select | "),
+            Span::styled("Space", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" Toggle | "),
+            Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" Confirm | "),
+            Span::styled("q/Esc", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" Quit "),
+        ]);
+        block = block.title_bottom(help_text);
+    }
+    table = table.block(block);
+
+    if app.state.selected().is_some() {
+        table = table.highlight_symbol(" >> ")
+             .row_highlight_style(Style::default().bg(Color::Rgb(123, 141, 255)).fg(Color::White).add_modifier(Modifier::BOLD));
+    }
+
+    f.render_stateful_widget(table, area, &mut app.state);
 }
