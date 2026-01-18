@@ -1,6 +1,4 @@
 #!/bin/bash
-set -e
-
 # Report file
 REPORT_FILE="test_report.md"
 echo "# 🧪 EXRN Comprehensive Test Report" > "$REPORT_FILE"
@@ -35,7 +33,11 @@ run_test() {
     eval "$setup_cmd"
     
     # Run
-    eval "$run_cmd"
+    # Capture exit code to log if run failed, but don't exit
+    if ! eval "$run_cmd"; then
+        echo "Command failed for '$test_name'"
+        # We proceed to verify, which will likely fail and log the error
+    fi
     
     # Verify
     if eval "$verify_cmd"; then
@@ -49,6 +51,9 @@ run_test() {
 
 # --- PREPARATION ---
 EXRN_BIN="./target/release/exrn"
+if [ ! -f "$EXRN_BIN" ]; then
+    EXRN_BIN="./target/release/exrn.exe"
+fi
 mkdir -p test_env
 
 # --- TEST 1: Basic Renaming (Txt to Md) ---
