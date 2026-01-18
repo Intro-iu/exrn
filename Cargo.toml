@@ -3,12 +3,12 @@ name = "exrn"
 edition = "2021"
 version = "0.1.0"
 authors = ["Intro <Intro-iu@outlook.com>"]
-license = "GPL-3.0"
-description = "A simple terminal tool for renaming files"
+license = "MIT"
+description = "A Command-line File Renaming Tool Based on Regular Expressions"
 readme = "README.md"
 homepage = "https://github.com/Intro-iu/exrn"
-repository = "https://github.com/Intro-iu/exrn"
-keywords = ["cli", "rename"]
+repository = "https://github.com/Intro-iu/exrn.git"
+keywords = ["rust", "commands", "command-line-tool", "regular-expressions", "renamer"]
 categories = ["command-line-utilities"]
 
 [dependencies]
