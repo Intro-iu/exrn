@@ -1,0 +1,208 @@
+use crate::planner::RenameAction;
+use crossterm::{
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{
+    backend::CrosstermBackend,
+    layout::{Constraint, Rect},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{
+        Block, Borders, Cell, Row, Table, TableState,
+    },
+    Frame, Terminal,
+};
+use std::error::Error;
+use std::io;
+
+pub struct App {
+    pub actions: Vec<RenameAction>,
+    pub selected: Vec<bool>, // true if action is selected for execution
+    pub state: TableState,
+}
+
+impl App {
+    pub fn new(actions: Vec<RenameAction>) -> App {
+        let count = actions.len();
+        App {
+            actions,
+            selected: vec![true; count], // Default all selected
+            state: TableState::default().with_selected(0),
+        }
+    }
+
+    pub fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.actions.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    pub fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.actions.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    pub fn toggle_selection(&mut self) {
+        if let Some(i) = self.state.selected() {
+            self.selected[i] = !self.selected[i];
+        }
+    }
+}
+
+pub fn run_tui(actions: Vec<RenameAction>) -> Result<Option<Vec<RenameAction>>, Box<dyn Error>> {
+    // Setup terminal
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    // Create App state
+    let mut app = App::new(actions);
+
+    // Run loop
+    let res = run_app(&mut terminal, &mut app);
+
+    // Restore terminal
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    terminal.show_cursor()?;
+
+    if let Ok(confirmed) = res {
+        if confirmed {
+            // Filter actions
+            let final_actions: Vec<RenameAction> = app
+                .actions
+                .into_iter()
+                .zip(app.selected.into_iter())
+                .filter(|(_, selected)| *selected)
+                .map(|(action, _)| action)
+                .collect();
+            Ok(Some(final_actions))
+        } else {
+            Ok(None) // Cancelled
+        }
+    } else {
+        Err(res.err().unwrap())
+    }
+}
+
+fn run_app(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>, app: &mut App) -> Result<bool, Box<dyn Error>> {
+    loop {
+        terminal.draw(|f| ui(f, app))?;
+
+        if let Event::Key(key) = event::read()? {
+            if key.kind != KeyEventKind::Press {
+                continue;
+            }
+
+            match key.code {
+                KeyCode::Char('q') | KeyCode::Esc => return Ok(false),
+                KeyCode::Char('c') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => return Ok(false),
+                KeyCode::Down | KeyCode::Char('j') => app.next(),
+                KeyCode::Up | KeyCode::Char('k') => app.previous(),
+                KeyCode::Char(' ') => app.toggle_selection(),
+                KeyCode::Enter => return Ok(true),
+                _ => {}
+            }
+        }
+    }
+}
+
+fn ui(f: &mut Frame, app: &mut App) {
+    render_table(f, app, f.area());
+}
+
+fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
+    let header_cells = ["Selected", "Source", "Target"]
+        .iter()
+        .map(|h| Cell::from(*h).style(Style::default().fg(Color::White)));
+    let header = Row::new(header_cells)
+        .style(Style::default().add_modifier(Modifier::BOLD))
+        .height(1)
+        .bottom_margin(1);
+
+    let rows = app.actions.iter().enumerate().map(|(i, action)| {
+        let is_selected = app.selected[i];
+        
+        let checkbox = if is_selected { "[x]" } else { "[ ]" };
+        let checkbox_style = if is_selected {
+            Style::default().fg(Color::White)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+
+        let src = action.source.file_name().unwrap_or_default().to_string_lossy();
+        let target = action.target.file_name().unwrap_or_default().to_string_lossy();
+        
+        // Colors: If selected, White -> White. If not, Dimmed.
+        let (src_style, target_style) = if is_selected {
+            (Style::default().fg(Color::White), Style::default().fg(Color::White))
+        } else {
+            (Style::default().fg(Color::DarkGray), Style::default().fg(Color::DarkGray))
+        };
+
+        let cells = vec![
+            Cell::from(checkbox).style(checkbox_style),
+            Cell::from(src).style(src_style),
+            Cell::from(target).style(target_style),
+        ];
+        Row::new(cells).height(1).bottom_margin(0)
+    });
+
+    let help_text = Line::from(vec![
+        Span::raw(" Controls: "),
+        Span::styled("↑/↓", Style::default().add_modifier(Modifier::BOLD)),
+        Span::raw(" Select | "),
+        Span::styled("Space", Style::default().add_modifier(Modifier::BOLD)),
+        Span::raw(" Toggle | "),
+        Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
+        Span::raw(" Confirm | "),
+        Span::styled("q/Esc", Style::default().add_modifier(Modifier::BOLD)),
+        Span::raw(" Quit "),
+    ]);
+
+    let t = Table::new(
+        rows,
+        [
+            Constraint::Length(10),
+            Constraint::Percentage(45),
+            Constraint::Percentage(45),
+        ],
+    )
+    .header(header)
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(" exrn - Review Changes ")
+            .title_bottom(help_text)
+            .border_style(Style::default().fg(Color::Rgb(85, 108, 255)))
+    )
+    .highlight_symbol(" >> ")
+    .row_highlight_style(Style::default().bg(Color::Rgb(123, 141, 255)).fg(Color::White).add_modifier(Modifier::BOLD));
+
+    f.render_stateful_widget(t, area, &mut app.state);
+}

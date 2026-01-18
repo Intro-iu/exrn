@@ -16,6 +16,9 @@ clap = { version = "4.5.54", features = ["derive"] }
 regex = "1.12.2"
 glob = "0.3.3"
 colored = "3.1.1"
+ratatui = "0.30.0"
+crossterm = "0.29.0"
+tui-textarea = "0.7.0"
 
 [dev-dependencies]
 tempfile = "3.24.0"

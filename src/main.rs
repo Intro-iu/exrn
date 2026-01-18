@@ -1,13 +1,14 @@
 mod cli;
 mod file_utils;
 mod planner;
+mod tui;
 
 use clap::Parser;
 use cli::Cli;
 use colored::*;
 use regex::Regex;
 use std::error::Error;
-use std::io::{self, Write};
+use std::io::{self, Write, IsTerminal};
 
 fn confirm_action(prompt: &str) -> Result<bool, Box<dyn Error>> {
     print!("{} [y/N]: ", prompt);
@@ -43,48 +44,77 @@ fn main() -> Result<(), Box<dyn Error>> {
         display_plan.sort_by(|a, b| a.source.cmp(&b.source));
     }
 
-    println!("Planned changes ({} files):", display_plan.len());
-    for (i, action) in display_plan.iter().enumerate() {
-        let src_name = action.source.file_name().unwrap().to_string_lossy();
-        let dst_name = action.target.file_name().unwrap().to_string_lossy();
-        
-        println!(
-            "[{:>2}] {} {} {}",
-            (i + 1).to_string().dimmed(),
-            src_name.red(),
-            "=>".dimmed(),
-            dst_name.green()
-        );
+    // INTERACTIVE MODE CHECK
+    // If not auto-confirm (-y), not dry-run, and is a TTY: use TUI
+    if !args.yes && !args.dry_run && std::io::stdout().is_terminal() {
+        // TUI Mode
+        match tui::run_tui(display_plan)? {
+            Some(selected_actions) => {
+                if selected_actions.is_empty() {
+                    println!("{}", "No files selected for renaming.".yellow());
+                    return Ok(());
+                }
+                execute_renames(selected_actions);
+            }
+            None => {
+                println!("{}", "Operation cancelled".yellow());
+            }
+        }
+    } else {
+        // Headless Mode (Standard Output)
+        println!("Planned changes ({} files):", display_plan.len());
+        for (i, action) in display_plan.iter().enumerate() {
+            let src_name = action.source.file_name().unwrap().to_string_lossy();
+            let dst_name = action.target.file_name().unwrap().to_string_lossy();
+            
+            println!(
+                "[{:>2}] {} {} {}",
+                (i + 1).to_string().dimmed(),
+                src_name.red(),
+                "=>".dimmed(),
+                dst_name.green()
+            );
+        }
+
+        if args.dry_run {
+            println!("{}", "Dry run complete. No files were modified.".yellow());
+            return Ok(());
+        }
+
+        // User Confirmation (Headless)
+        if !args.yes && !confirm_action(&"Confirm renaming?".bold().to_string())? {
+            println!("{}", "Operation cancelled".yellow());
+            return Ok(());
+        }
+
+        // Execute
+        execute_renames(display_plan);
     }
 
-    if args.dry_run {
-        println!("{}", "Dry run complete. No files were modified.".yellow());
-        return Ok(());
-    }
+    Ok(())
+}
 
-    // User Confirmation
-    if !args.yes && !confirm_action(&"Confirm renaming?".bold().to_string())? {
-        println!("{}", "Operation cancelled".yellow());
-        return Ok(());
-    }
-
-    // Execute
+fn execute_renames(actions: Vec<planner::RenameAction>) {
     let mut success = 0;
-    for action in &execution_plan {
+    let total = actions.len();
+    
+    for action in &actions {
         match file_utils::safe_rename(&action.source, &action.target) {
             Ok(_) => success += 1,
             Err(e) => eprintln!("{} {}: {}", "Error renaming".red().bold(), action.source.display(), e),
         }
     }
 
-    println!(
-        "{} {}/{} files",
-        "Successfully renamed".green().bold(),
-        success,
-        execution_plan.len()
-    );
-
-    Ok(())
+    if success > 0 {
+        println!(
+            "{} {}/{} files",
+            "Successfully renamed".green().bold(),
+            success,
+            total
+        );
+    } else {
+         println!("{}", "No files renamed.".yellow());
+    }
 }
 
 

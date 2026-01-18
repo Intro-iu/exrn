@@ -1,3 +1,5 @@
+<div align="center">
+
 # exrn 🔄
 
 **A Safe & Powerful Batch File Renamer with Regex Magic** ✨
@@ -6,7 +8,11 @@
 ![Build](https://github.com/Intro-iu/exrn/actions/workflows/ci.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)
 
+![Interactive TUI](./doc/images/demo.png)
+
 *Transform your files like a wizard! 🧙*
+
+</div>
 
 ## Features 🌟
 
@@ -51,6 +57,15 @@ exrn -s [SOURCES] -r 'REGEX' 'REPLACEMENT' [OPTIONS]
 | `--sort`    |       | Sort the output list by source filename (Default: true)                           |
 | `--yes`     | `-y`  | Auto-confirm all prompts (Non-interactive mode)                                   |
 
+## Interactive Mode (TUI) 🖥️
+
+When running without `-y` or `-d`, `exrn` launches a rich Terminal UI:
+
+- **↑/↓**: Navigate through the file list.
+- **Space**: Toggle selection (include/exclude file from renaming).
+- **Enter**: Confirm and execute the selected renames.
+- **Esc/q**: Quit without making changes.
+
 ## Examples 🧪
 
 ### 1. Change Extensions (Dry Run first!)
@@ -73,17 +88,10 @@ exrn -s '*.txt' -r '(\d{4}-\d{2}-\d{2})_(.*)\.txt' '$2_$1.txt'
 ```
 
 ### 4. Direct Files (Shell Expansion)
-You can let your shell handle the globbing (useful for zsh/bash users):
+You can let your shell handle the globbing:
 ```bash
 exrn -s *.png -r 'Img_(.*)' 'Picture_$1'
 ```
-
-## Safety Measures 🔒
-
-`exrn` includes robust protection layers:
-- **Cycle Detection**: Prevents circular renaming (e.g. `A->B` and `B->A`) which would require temporary files.
-- **Topological Sorting**: Automatically orders operations so you don't overwrite files that are themselves being moved.
-- **Path Validation**: Prevents accidental file movement to other directories if not intended.
 
 ## License 📄
 
@@ -92,5 +100,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 💡 **Pro Tip**: Always use `--dry-run` (`-d`) first when trying complex regexes!
+
 🐞 Found an issue? [Report it here](https://github.com/Intro-iu/exrn/issues)
+
 ⭐ Love exrn? Give us a star on [GitHub](https://github.com/Intro-iu/exrn)!
