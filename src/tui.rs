@@ -117,18 +117,54 @@ pub fn print_preview(actions: Vec<RenameAction>) -> Result<(), Box<dyn Error>> {
     app.show_help = false;
     app.state.select(None); // Disable cursor highlight
 
-    let height = (app.actions.len() + 4) as u16;
+    // Calculate layout parameters
+    let term_size = crossterm::terminal::size()?;
+    let width = term_size.0;
+    
+    // Calculate total height needed based on wrapping
+    // Table width = terminal width - 2 (borders)
+    // Column widths: Matches constraints in render_table
+    // 1: 10 chars
+    // 2: 45% (approx)
+    // 3: 45% (approx)
+    
+    let table_width = if width > 2 { width - 2 } else { width };
+    let col2_width = (table_width as f64 * 0.45) as usize;
+    // Ensure at least 1 char width
+    let wrap_width = if col2_width < 1 { 1 } else { col2_width };
+
+    let mut total_height = 4; // Header(2) + Borders(2)
+    for action in &app.actions {
+        let src = action.source.file_name().unwrap_or_default().to_string_lossy();
+        let target = action.target.file_name().unwrap_or_default().to_string_lossy();
+        
+        let src_lines = (src.chars().count() + wrap_width - 1) / wrap_width;
+        let target_lines = (target.chars().count() + wrap_width - 1) / wrap_width;
+        let row_height = std::cmp::max(src_lines, target_lines).max(1);
+        total_height += row_height as u16;
+    }
 
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::with_options(
         backend,
         TerminalOptions {
-            viewport: Viewport::Inline(height),
+            viewport: Viewport::Inline(total_height),
         },
     )?;
 
     terminal.draw(|f| ui(f, &mut app))?;
     Ok(())
+}
+
+fn wrap_text(text: &str, width: usize) -> String {
+    if width == 0 { return text.to_string(); }
+    let chars: Vec<char> = text.chars().collect();
+    if chars.is_empty() { return String::new(); }
+    
+    chars.chunks(width)
+        .map(|chunk| chunk.iter().collect::<String>())
+        .collect::<Vec<String>>()
+        .join("\n")
 }
 
 fn run_app(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>, app: &mut App) -> Result<bool, Box<dyn Error>> {
@@ -166,6 +202,11 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
         .height(1)
         .bottom_margin(1);
 
+    // Calculate wrapping for rendering
+    let table_width = if area.width > 2 { area.width - 2 } else { area.width };
+    let col_width = (table_width as f64 * 0.45) as usize;
+    let wrap_width = if col_width < 1 { 1 } else { col_width };
+
     let rows = app.actions.iter().enumerate().map(|(i, action)| {
         let is_selected = app.selected[i];
         let has_cursor = app.state.selected().map_or(false, |s| s == i);
@@ -180,7 +221,18 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
         let src = action.source.file_name().unwrap_or_default().to_string_lossy();
         let target = action.target.file_name().unwrap_or_default().to_string_lossy();
         
-        // Colors: If selected, White -> White. If not, Dimmed.
+        let src_wrapped = wrap_text(&src, wrap_width);
+        let target_wrapped = wrap_text(&target, wrap_width);
+        
+        // Calculate height
+
+        let src_len = src.chars().count();
+        let target_len = target.chars().count();
+        let s_lines = if src_len == 0 { 1 } else { (src_len + wrap_width - 1) / wrap_width };
+        let t_lines = if target_len == 0 { 1 } else { (target_len + wrap_width - 1) / wrap_width };
+        let row_height = std::cmp::max(s_lines, t_lines).max(1) as u16;
+
+        // Colors
         let (src_style, target_style) = if has_cursor || is_selected {
             (Style::default().fg(Color::White), Style::default().fg(Color::White))
         } else {
@@ -189,10 +241,10 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
 
         let cells = vec![
             Cell::from(checkbox).style(checkbox_style),
-            Cell::from(src).style(src_style),
-            Cell::from(target).style(target_style),
+            Cell::from(src_wrapped).style(src_style),
+            Cell::from(target_wrapped).style(target_style),
         ];
-        Row::new(cells).height(1).bottom_margin(0)
+        Row::new(cells).height(row_height).bottom_margin(0)
     });
 
     let mut table = Table::new(
