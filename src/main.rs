@@ -7,6 +7,7 @@ use clap::Parser;
 use cli::Cli;
 use colored::*;
 use regex::Regex;
+use std::collections::HashSet;
 use std::error::Error;
 use std::io::{self, Write, IsTerminal};
 
@@ -54,7 +55,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                     println!("{}", "No files selected for renaming.".yellow());
                     return Ok(());
                 }
-                execute_renames(selected_actions);
+                
+                // Re-order selected actions according to the safe topological execution_plan
+                // 1. Create a set of selected sources for fast lookup
+                let selected_sources: HashSet<_> = selected_actions.iter().map(|a| &a.source).collect();
+                
+                // 2. Filter the original execution_plan
+                let final_plan: Vec<_> = execution_plan
+                    .into_iter()
+                    .filter(|a| selected_sources.contains(&a.source))
+                    .collect();
+
+                execute_renames(final_plan);
             }
             None => {
                 println!("{}", "Operation cancelled".yellow());
@@ -87,8 +99,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             return Ok(());
         }
 
-        // Execute
-        execute_renames(display_plan);
+        // Execute SAFE plan (not display plan)
+        execute_renames(execution_plan);
     }
 
     Ok(())
