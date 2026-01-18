@@ -1,0 +1,35 @@
+name: exrn_CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Check Rust Version
+      run: cargo --version
+      
+    - name: Build Release
+      run: cargo build --release --verbose
+      
+    - name: Run Unit Tests
+      run: cargo test --verbose
+    
+    - name: Run Comprehensive Integration Tests
+      id: integration
+      run: |
+        chmod +x tests/comprehensive_test.sh
+        ./tests/comprehensive_test.sh
+        
+    - name: Publish Test Report
+      if: always()
+      run: cat test_report.md >> $GITHUB_STEP_SUMMARY
