@@ -19,11 +19,14 @@
 - 🎯 **Precision Matching**: Supports both standard GLOB patterns and direct Shell-expanded paths.
 - 🔄 **Smart Replacement**: Use standard Regex Capture Groups (e.g., `$1`, `$2`) for complex renaming.
 - ⛓️ **Chain Renaming**: Safely handles dependency chains (e.g., `A -> B`, `B -> C`) using topological sorting.
-- 🎨 **Visual Feedback**: **Colorized** diff previews (Red -> Green) to verify changes instantly.
+- 🎨 **Rich TUI**:
+    - **Interactive Mode**: Select/Deselect files with a modern Terminal UI (Ratatui-based).
+    - **Smart Preview**: Headless modes (Dry Run/Auto-confirm) also display a beautiful table preview even without interaction.
+    - **Line Wrapping**: Automatically handles long filenames by wrapping text within columns.
+    - **CI Friendly**: Detects non-TTY environments (CI/Pipes) and falls back to plain text output automatically.
 - 🛡️ **Safety First**:
     - **Dry Run** mode to preview without touching files.
     - Collision detection.
-    - Interactive confirmation.
 - 🚀 **Blazing Fast**: Built with Rust.
 
 ## Installation ⚡
@@ -59,12 +62,14 @@ exrn -s [SOURCES] -r 'REGEX' 'REPLACEMENT' [OPTIONS]
 
 ## Interactive Mode (TUI) 🖥️
 
-When running without `-y` or `-d`, `exrn` launches a rich Terminal UI:
+When running in a terminal without `-y` or `-d`, `exrn` launches a rich interactive interface:
 
 - **↑/↓**: Navigate through the file list.
 - **Space**: Toggle selection (include/exclude file from renaming).
 - **Enter**: Confirm and execute the selected renames.
 - **Esc/q**: Quit without making changes.
+
+> **Note**: In **Dry Run** or **Auto-Confirm** modes, `exrn` will still display the table preview (without interactivity) if running in a terminal. In CI environments, it automatically falls back to plain text.
 
 ## Examples 🧪
 
